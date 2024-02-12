@@ -3,7 +3,7 @@ import 'dotenv/config';
 import { validate, v4 as uuidv4 } from 'uuid';
 import usersDB from './data/users.js';
 
-import { validateUser, addUserToDB } from './helpers.js';
+import { validateUser, addUserToDB, updateUserToDB } from './helpers.js';
 
 import getUsers from './controllers/getUsers.js';
 import getUser from './controllers/getUser.js';
@@ -46,13 +46,6 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  if (req.url === '/') {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/html');
-
-    return res.end(`<h1>Server is up and running on: ${PORT} with ${id}</h1>`);
-  }
-
   if (req.url.startsWith('/api/users') && req.method === 'DELETE') {
     const parts = req.url.split('/');
     const uid = parts[parts.length - 1];
@@ -71,6 +64,7 @@ const server = http.createServer((req, res) => {
       res.setHeader('Content-Type', 'text/plain');
       return res.end("User doesn't exist. Try to use another ID");
     }
+
     const indexToDelete = usersDB.findIndex((user) => user.id === uid);
     if (indexToDelete !== -1) {
       usersDB.splice(indexToDelete, 1);
@@ -83,7 +77,6 @@ const server = http.createServer((req, res) => {
     const isValidUUID = validate(uid);
     const user = usersDB.find((user) => user.id === uid);
 
-    console.log('user', user);
     if (!isValidUUID) {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'text/plain');
@@ -95,13 +88,35 @@ const server = http.createServer((req, res) => {
       res.setHeader('Content-Type', 'text/plain');
       return res.end("User doesn't exist. Try to use another ID");
     }
-    const indexToDelete = usersDB.findIndex((user) => user.id === uid);
-    if (indexToDelete !== -1) {
-      usersDB.splice(indexToDelete, 1);
-    }
+
+    let userObject = '';
+    res.setHeader('Content-Type', 'application/json');
+
+    req.on('data', (chunk) => (userObject += chunk));
+    req.on('end', () => {
+      if (!validateUser(userObject)) {
+        res.statusCode = 400;
+        return res.end(
+          JSON.stringify({ message: 'Invalid fields for user description' })
+        );
+      } else {
+        const indexToUpdate = usersDB.findIndex((user) => user.id === uid);
+        if (indexToUpdate !== -1) {
+          updateUserToDB(userObject, indexToUpdate);
+          res.end({ message: 'user is updated' });
+        }
+      }
+    });
   }
 
-  notFound(req, res);
+  if (req.url === '/') {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/html');
+
+    return res.end(`<h1>Server is up and running on: ${PORT} with ${id}</h1>`);
+  }
+
+  // notFound(req, res);
 });
 
 server.listen(PORT, () => {
